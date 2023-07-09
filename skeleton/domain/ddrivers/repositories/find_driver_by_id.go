@@ -21,7 +21,7 @@ func (u *repo) Find(ctx context.Context, id string) error {
     `
 
 	err := u.db.QueryRowContext(ctx, query, id).Scan(
-		&u.pb.Id, &u.pb.Name, &u.pb.LicenceNumber, &u.pb.CompanyId, &u.pb.CompanyName)
+		&u.pb.Id, &u.pb.Name, &u.pb.Phone, &u.pb.LicenceNumber, &u.pb.CompanyId, &u.pb.CompanyName)
 
 	if err != nil {
 		u.log.Println(err.Error())
