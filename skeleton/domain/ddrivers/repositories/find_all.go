@@ -1,34 +1,25 @@
-package ddrivers
+package repositories
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"log"
+	"skeleton/lib/helper"
 	"skeleton/pb/drivers"
 	"skeleton/pb/generic"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-type DriverHandler struct {
-	log *log.Logger
-	db  *sql.DB
-}
+func (u *repo) FindAll(ctx context.Context, in *drivers.DriverListInput) (*drivers.Drivers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, helper.ContextError(ctx)
+	default:
+	}
 
-func NewDriverHandler(log *log.Logger, db *sql.DB) *DriverHandler {
-	handler := new(DriverHandler)
-	handler.log = log
-	handler.db = db
-	return handler
-}
-
-func (u *DriverHandler) List(ctx context.Context, in *drivers.DriverListInput) (*drivers.Drivers, error) {
 	out := &drivers.Drivers{}
 	query := `SELECT id, name, phone, licence_number, company_id, company_name FROM drivers`
 	where := []string{"is_deleted = false"}
@@ -154,7 +145,8 @@ func (u *DriverHandler) List(ctx context.Context, in *drivers.DriverListInput) (
 
 	rows, err := u.db.QueryContext(ctx, query, paramQueries...)
 	if err != nil {
-		return out, logError(u.log, codes.Internal, err)
+		u.log.Println(err.Error())
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	defer rows.Close()
 
@@ -162,74 +154,17 @@ func (u *DriverHandler) List(ctx context.Context, in *drivers.DriverListInput) (
 		var obj drivers.Driver
 		err = rows.Scan(&obj.Id, &obj.Name, &obj.Phone, &obj.LicenceNumber, &obj.CompanyId, &obj.CompanyName)
 		if err != nil {
-			return out, logError(u.log, codes.Internal, err)
+			u.log.Println(err.Error())
+			return nil, status.Error(codes.Internal, err.Error())
 		}
 
 		out.Driver = append(out.Driver, &obj)
 	}
 
 	if rows.Err() != nil {
-		return out, logError(u.log, codes.Internal, rows.Err())
+		u.log.Println(rows.Err().Error())
+		return nil, status.Error(codes.Internal, rows.Err().Error())
 	}
 
 	return out, nil
-}
-
-func (u *DriverHandler) Create(ctx context.Context, in *drivers.Driver) (*drivers.Driver, error) {
-	query := `
-        INSERT INTO drivers (
-            id, name, phone, licence_number, company_id, company_name, created, created_by, updated, updated_by)
-        VALUES ($1, $2, $3 ,$4, $5, $6, $7, $8, $9, $10)
-    `
-	in.Id = uuid.New().String()
-	now := time.Now().Format("2006-01-02 15:04:05.000000")
-	_, err := u.db.ExecContext(ctx, query,
-		in.Id, in.Name, in.Phone, in.LicenceNumber, in.CompanyId, in.CompanyName, now, "jaka", now, "jaka")
-
-	if err != nil {
-		return &drivers.Driver{}, logError(u.log, codes.Internal, err)
-	}
-
-	return in, nil
-}
-
-func (u *DriverHandler) Update(ctx context.Context, in *drivers.Driver) (*drivers.Driver, error) {
-	query := `
-        UPDATE drivers 
-        SET name = $1, 
-                phone = $2, 
-                licence_number = $3, 
-                updated = $4, 
-                updated_by = $5
-        WHERE id = $6
-    `
-	now := time.Now().Format("2006-01-02 15:04:05.000000")
-	_, err := u.db.ExecContext(ctx, query,
-		in.Name, in.Phone, in.LicenceNumber, now, "jaka", in.Id)
-
-	if err != nil {
-		return &drivers.Driver{}, logError(u.log, codes.Internal, err)
-	}
-
-	return in, nil
-}
-
-func (u *DriverHandler) Delete(ctx context.Context, in *generic.Id) (*generic.BoolMessage, error) {
-	query := `
-        UPDATE drivers 
-        SET is_deleted = true
-        WHERE id = $1
-    `
-	_, err := u.db.ExecContext(ctx, query, in.Id)
-
-	if err != nil {
-		return &generic.BoolMessage{IsTrue: false}, logError(u.log, codes.Internal, err)
-	}
-
-	return &generic.BoolMessage{IsTrue: true}, nil
-}
-
-func logError(log *log.Logger, code codes.Code, err error) error {
-	log.Print(err.Error())
-	return status.Error(code, err.Error())
 }
